@@ -102,7 +102,8 @@ fi
 prepare_canadian_toolchain $BUILD_DIR
 
 CFLAGS=$HOST_CFLAGS" -O2 -s"
-export CC CFLAGS
+CFLAGS_FOR_BUILD=$CFLAGS
+export CC CFLAGS CFLAGS_FOR_BUILD
 
 log "Configuring the build"
 cd $BUILD_DIR/src && run ./configure $CONFIGURE_FLAGS --build=$ABI_CONFIGURE_BUILD
