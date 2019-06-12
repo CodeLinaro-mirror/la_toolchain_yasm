@@ -31,15 +31,15 @@ from ndk.hosts import Host
 
 def main(args):
     build_cmd = [
-        'bash', 'build-yasm.sh', build_support.toolchain_path(),
+        'bash',
+        'build-yasm.sh',
+        build_support.toolchain_path(),
         build_support.ndk_path(),
+        '--try-64',
     ]
 
     if args.host.is_windows:
         build_cmd.append('--mingw')
-
-    if args.host != Host.Windows:
-        build_cmd.append('--try-64')
 
     build_cmd.append('--build-dir=' + os.path.join(args.out_dir, 'yasm'))
     build_support.build(build_cmd, args, intermediate_package=True)
