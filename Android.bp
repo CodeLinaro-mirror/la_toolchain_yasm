@@ -1,0 +1,383 @@
+// Copyright 2026 The Android Open Source Project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package {
+    default_applicable_licenses: ["external_yasm_license"],
+}
+
+license {
+    name: "external_yasm_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-BSD-2-Clause",
+        "SPDX-license-identifier-BSD-3-Clause",
+        "SPDX-license-identifier-GPL-2.0",
+        "SPDX-license-identifier-LGPL-2.0",
+        "SPDX-license-identifier-Artistic",
+    ],
+    license_text: [
+        "COPYING",
+    ],
+}
+
+cc_defaults {
+    name: "yasm_defaults",
+    local_include_dirs: ["android"],
+    target: {
+        linux: {
+            local_include_dirs: ["android/linux"],
+        },
+        darwin: {
+            local_include_dirs: ["android/darwin"],
+        },
+    },
+    c_std: "gnu11",
+    stl: "none",
+    cflags: [
+        "-Wno-unused-parameter",
+        "-Wno-gnu-null-pointer-arithmetic",
+        "-Wno-null-pointer-subtraction",
+        "-Wno-deprecated-non-prototype",
+        "-DHAVE_CONFIG_H",
+    ],
+}
+
+// Tools used during the yasm build
+
+cc_binary_host {
+    name: "yasm_genmacro",
+    defaults: ["yasm_defaults"],
+    srcs: [
+        "tools/genmacro/genmacro.c",
+    ],
+}
+
+cc_binary_host {
+    name: "yasm_genmodule",
+    defaults: ["yasm_defaults"],
+    srcs: [
+        "libyasm/genmodule.c",
+    ],
+}
+
+cc_binary_host {
+    name: "yasm_genperf",
+    defaults: ["yasm_defaults"],
+    srcs: [
+        "tools/genperf/genperf.c",
+        "tools/genperf/perfect.c",
+        "libyasm/phash.c",
+        "libyasm/xmalloc.c",
+        "libyasm/xstrdup.c",
+    ],
+}
+
+cc_binary_host {
+    name: "yasm_genstring",
+    defaults: ["yasm_defaults"],
+    srcs: [
+        "genstring.c",
+    ],
+}
+
+cc_binary_host {
+    name: "yasm_genversion",
+    defaults: ["yasm_defaults"],
+    srcs: [
+        "modules/preprocs/nasm/genversion.c",
+    ],
+}
+
+cc_binary_host {
+    name: "yasm_re2c",
+    srcs: [
+        "tools/re2c/main.c",
+        "tools/re2c/code.c",
+        "tools/re2c/dfa.c",
+        "tools/re2c/parser.c",
+        "tools/re2c/actions.c",
+        "tools/re2c/scanner.c",
+        "tools/re2c/mbo_getopt.c",
+        "tools/re2c/substr.c",
+        "tools/re2c/translate.c",
+    ],
+    cflags: [
+        "-Wno-misleading-indentation",
+        "-Wno-switch",
+        "-Wno-unused-parameter",
+    ],
+}
+
+python_binary_host {
+    name: "yasm_gen_x86_insn",
+    main: "modules/arch/x86/gen_x86_insn.py",
+    srcs: ["modules/arch/x86/gen_x86_insn.py"],
+}
+
+// Generated files for the yasm build
+
+genrule {
+    name: "yasm_gas_token.c",
+    out: ["gas_token.c"],
+    srcs: ["modules/parsers/gas/gas-token.re"],
+    tools: ["yasm_re2c"],
+    cmd: "$(location yasm_re2c) -b -o $(out) $(in)",
+}
+
+genrule {
+    name: "yasm_nasm_token.c",
+    out: ["nasm_token.c"],
+    srcs: ["modules/parsers/nasm/nasm-token.re"],
+    tools: ["yasm_re2c"],
+    cmd: "$(location yasm_re2c) -b -o $(out) $(in)",
+}
+
+genrule {
+    name: "yasm_lc3bid.c",
+    srcs: ["modules/arch/lc3b/lc3bid.re"],
+    out: ["lc3bid.c"],
+    tools: ["yasm_re2c"],
+    cmd: "$(location yasm_re2c) -b -o $(out) $(in)",
+}
+
+genrule {
+    name: "yasm_license.c",
+    out: ["license.c"],
+    srcs: ["COPYING"],
+    tools: ["yasm_genstring"],
+    cmd: "$(location yasm_genstring) license_msg $(out) $(in)",
+}
+
+genrule {
+    name: "yasm_module.c",
+    out: ["module.c"],
+    srcs: [
+        "libyasm/module.in",
+        "Makefile.am",
+        "**/Makefile.inc",
+    ],
+    tools: ["yasm_genmodule"],
+    cmd: "TOP=$$PWD &&" +
+        "SRC=$$(dirname $(location Makefile.am)) &&" +
+        " (cd $$SRC &&" +
+        "  $$TOP/$(location yasm_genmodule) libyasm/module.in Makefile.am) &&" +
+        " mv $$SRC/module.c $(out)",
+}
+
+genrule {
+    name: "yasm_nasm_macros.c",
+    out: ["nasm-macros.c"],
+    srcs: ["modules/parsers/nasm/nasm-std.mac"],
+    tools: ["yasm_genmacro"],
+    cmd: "$(location yasm_genmacro) $(out) nasm_standard_mac $(in)",
+}
+
+genrule {
+    name: "yasm_version.mac",
+    out: ["version.mac"],
+    tools: ["yasm_genversion"],
+    cmd: "$(location yasm_genversion) $(out)",
+}
+
+genrule {
+    name: "yasm_nasm_version.c",
+    out: ["nasm-version.c"],
+    srcs: [":yasm_version.mac"],
+    tools: ["yasm_genmacro"],
+    cmd: "$(location yasm_genmacro) $(out) nasm_version_mac $(in)",
+}
+
+genrule {
+    name: "yasm_win64_gas.c",
+    out: ["win64-gas.c"],
+    srcs: ["modules/objfmts/coff/win64-gas.mac"],
+    tools: ["yasm_genmacro"],
+    cmd: "$(location yasm_genmacro) $(out) win64_gas_stdmac $(in)",
+}
+
+genrule {
+    name: "yasm_win64_nasm.c",
+    out: ["win64-nasm.c"],
+    srcs: ["modules/objfmts/coff/win64-nasm.mac"],
+    tools: ["yasm_genmacro"],
+    cmd: "$(location yasm_genmacro) $(out) win64_nasm_stdmac $(in)",
+}
+
+genrule {
+    name: "yasm_x86cpu.c",
+    out: ["x86cpu.c"],
+    srcs: ["modules/arch/x86/x86cpu.gperf"],
+    tools: ["yasm_genperf"],
+    cmd: "$(location yasm_genperf) $(in) $(out)",
+}
+
+genrule {
+    name: "yasm_x86insn_nasm.gperf",
+    out: ["x86insn_nasm.gperf"],
+    tools: ["yasm_gen_x86_insn"],
+    cmd: "$(location yasm_gen_x86_insn) && mv x86insn_nasm.gperf $(out)",
+}
+
+genrule {
+    name: "yasm_x86insn_gas.gperf",
+    out: ["x86insn_gas.gperf"],
+    tools: ["yasm_gen_x86_insn"],
+    cmd: "$(location yasm_gen_x86_insn) && mv x86insn_gas.gperf $(out)",
+}
+
+genrule {
+    name: "yasm_x86insns.c",
+    out: ["x86insns.c"],
+    tools: ["yasm_gen_x86_insn"],
+    cmd: "$(location yasm_gen_x86_insn) && mv x86insns.c $(out)",
+}
+
+genrule {
+    name: "yasm_x86insn_nasm.c",
+    out: ["x86insn_nasm.c"],
+    srcs: [":yasm_x86insn_nasm.gperf"],
+    tools: ["yasm_genperf"],
+    cmd: "$(location yasm_genperf) $(in) $(out)",
+}
+
+genrule {
+    name: "yasm_x86insn_gas.c",
+    out: ["x86insn_gas.c"],
+    srcs: [":yasm_x86insn_gas.gperf"],
+    tools: ["yasm_genperf"],
+    cmd: "$(location yasm_genperf) $(in) $(out)",
+}
+
+genrule {
+    name: "yasm_x86regtmod.c",
+    out: ["x86regtmod.c"],
+    srcs: ["modules/arch/x86/x86regtmod.gperf"],
+    tools: ["yasm_genperf"],
+    cmd: "$(location yasm_genperf) $(in) $(out)",
+}
+
+// libyasm
+
+cc_library_host_static {
+    name: "libyasm",
+    defaults: ["yasm_defaults"],
+    srcs: [
+        "modules/arch/x86/x86arch.c",
+        "modules/arch/x86/x86bc.c",
+        "modules/arch/x86/x86expr.c",
+        "modules/arch/x86/x86id.c",
+        "modules/arch/lc3b/lc3barch.c",
+        "modules/arch/lc3b/lc3bbc.c",
+        "modules/listfmts/nasm/nasm-listfmt.c",
+        "modules/parsers/gas/gas-parser.c",
+        "modules/parsers/gas/gas-parse.c",
+        "modules/parsers/gas/gas-parse-intel.c",
+        "modules/parsers/nasm/nasm-parser.c",
+        "modules/parsers/nasm/nasm-parse.c",
+        "modules/preprocs/nasm/nasm-preproc.c",
+        "modules/preprocs/nasm/nasm-pp.c",
+        "modules/preprocs/nasm/nasmlib.c",
+        "modules/preprocs/nasm/nasm-eval.c",
+        "modules/preprocs/raw/raw-preproc.c",
+        "modules/preprocs/cpp/cpp-preproc.c",
+        "modules/preprocs/gas/gas-preproc.c",
+        "modules/preprocs/gas/gas-eval.c",
+        "modules/dbgfmts/codeview/cv-dbgfmt.c",
+        "modules/dbgfmts/codeview/cv-symline.c",
+        "modules/dbgfmts/codeview/cv-type.c",
+        "modules/dbgfmts/dwarf2/dwarf2-dbgfmt.c",
+        "modules/dbgfmts/dwarf2/dwarf2-line.c",
+        "modules/dbgfmts/dwarf2/dwarf2-aranges.c",
+        "modules/dbgfmts/dwarf2/dwarf2-info.c",
+        "modules/dbgfmts/null/null-dbgfmt.c",
+        "modules/dbgfmts/stabs/stabs-dbgfmt.c",
+        "modules/objfmts/dbg/dbg-objfmt.c",
+        "modules/objfmts/bin/bin-objfmt.c",
+        "modules/objfmts/elf/elf.c",
+        "modules/objfmts/elf/elf-objfmt.c",
+        "modules/objfmts/elf/elf-x86-x86.c",
+        "modules/objfmts/elf/elf-x86-amd64.c",
+        "modules/objfmts/elf/elf-x86-x32.c",
+        "modules/objfmts/coff/coff-objfmt.c",
+        "modules/objfmts/coff/win64-except.c",
+        "modules/objfmts/macho/macho-objfmt.c",
+        "modules/objfmts/rdf/rdf-objfmt.c",
+        "modules/objfmts/xdf/xdf-objfmt.c",
+        "libyasm/assocdat.c",
+        "libyasm/bitvect.c",
+        "libyasm/bc-align.c",
+        "libyasm/bc-data.c",
+        "libyasm/bc-incbin.c",
+        "libyasm/bc-org.c",
+        "libyasm/bc-reserve.c",
+        "libyasm/bytecode.c",
+        "libyasm/errwarn.c",
+        "libyasm/expr.c",
+        "libyasm/file.c",
+        "libyasm/floatnum.c",
+        "libyasm/hamt.c",
+        "libyasm/insn.c",
+        "libyasm/intnum.c",
+        "libyasm/inttree.c",
+        "libyasm/linemap.c",
+        "libyasm/md5.c",
+        "libyasm/mergesort.c",
+        "libyasm/phash.c",
+        "libyasm/section.c",
+        "libyasm/strcasecmp.c",
+        "libyasm/strsep.c",
+        "libyasm/symrec.c",
+        "libyasm/valparam.c",
+        "libyasm/value.c",
+        "libyasm/xmalloc.c",
+        "libyasm/xstrdup.c",
+        ":yasm_x86cpu.c",
+        ":yasm_x86regtmod.c",
+        ":yasm_lc3bid.c",
+        ":yasm_gas_token.c",
+        ":yasm_nasm_token.c",
+        ":yasm_module.c",
+    ],
+    generated_headers: [
+        "yasm_x86insn_gas.c",
+        "yasm_x86insn_nasm.c",
+        "yasm_x86insns.c",
+        "yasm_win64_gas.c",
+        "yasm_win64_nasm.c",
+        "yasm_nasm_macros.c",
+        "yasm_nasm_version.c",
+    ],
+}
+
+// The yasm binary
+
+// Remove the "Compiled on __DATE__" messages that makes the binary nondeterministic.
+genrule {
+    name: "yasm.c",
+    out: ["yasm.c"],
+    srcs: ["frontends/yasm/yasm.c"],
+    cmd: "sed -e'/\"Compiled on \" __DATE__ \".\",/d' $(in) > $(out)",
+}
+
+cc_binary_host {
+    name: "yasm",
+    defaults: ["yasm_defaults"],
+    srcs: [
+        ":yasm.c",
+        "frontends/yasm/yasm-options.c",
+    ],
+    static_libs: ["libyasm"],
+    generated_headers: ["yasm_license.c"],
+    local_include_dirs: ["frontends/yasm"],
+}
